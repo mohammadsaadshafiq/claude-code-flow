@@ -1,9 +1,9 @@
 # code-flow-explainer
 
 A Claude Code skill that explains how a codebase is wired: entry points,
-dependency graph, hub files, and circular dependencies. It outputs an
-interactive HTML graph, a Mermaid diagram, and a JSON summary that Claude
-narrates in plain language.
+dependency graph, hub files, and circular dependencies. It outputs a markdown
+report with an embedded Mermaid diagram (renders right in your IDE) and an
+interactive HTML graph, and Claude narrates the flow in plain language.
 
 ![Interactive dependency graph produced by code-flow-explainer](docs/demo.png)
 
