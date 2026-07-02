@@ -550,6 +550,13 @@ def main():
             json.dump(summary, f, indent=2)
         written.append(f"{out}.json")
 
+    # remove leftovers from prior runs / older versions so stale outputs
+    # never get mistaken for the current graph
+    stale = [f"{out}.mmd"] + ([] if args.json else [f"{out}.json"])
+    removed = [s for s in stale if os.path.isfile(s) and (os.remove(s) or True)]
+    if removed:
+        print(f"Removed stale {', '.join(removed)}")
+
     print(f"Analyzed {len(files_set)} files, {len(edges)} dependencies.")
     print(f"  Entry points: {len(meta['entry_points'])}  Hubs: {len(meta['hubs'])}  Cycles: {len(meta['cycles'])}")
     print(f"Wrote {', '.join(written)}")
