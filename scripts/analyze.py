@@ -283,56 +283,143 @@ def make_mermaid(edges, meta, max_nodes):
     return "\n".join(lines)
 
 
-HTML_TMPL = """<!doctype html>
-<html><head><meta charset="utf-8"><title>Code Flow — {title}</title>
+# Board-style UI. Tokens (__TITLE__, __NODES__, ...) are substituted with
+# str.replace, not str.format, so the CSS/JS below needs no brace escaping.
+HTML_TMPL = r"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Code Flow — __TITLE__</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
 <style>
-  body{{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0f1117;color:#e6e6e6}}
-  header{{padding:14px 20px;background:#181b24;border-bottom:1px solid #262a36}}
-  header h1{{margin:0;font-size:16px;font-weight:600}}
-  header .stats{{font-size:12px;color:#9aa4b2;margin-top:4px}}
-  #net{{width:100vw;height:calc(100vh - 92px)}}
-  .legend{{position:absolute;bottom:14px;left:14px;background:#181b24cc;padding:8px 12px;border-radius:8px;font-size:12px;border:1px solid #262a36}}
-  .dot{{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}}
+  :root{
+    --plane:#f9f9f7; --card:#ffffff; --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --hairline:#e1e0d9; --accent:#2a78d6; --critical:#d03b3b;
+    --shadow:0 1px 2px rgba(11,11,11,.05), 0 6px 16px rgba(11,11,11,.07);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;display:flex;flex-direction:column;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--plane);color:var(--ink)}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:12px 20px;background:var(--card);border-bottom:1px solid var(--hairline)}
+  header h1{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em}
+  header h1 span{color:var(--muted);font-weight:500}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:12px;color:var(--ink-2);background:var(--plane);
+    border:1px solid var(--hairline);border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .chip b{color:var(--ink);font-weight:650}
+  .chip.alert{color:var(--critical);border-color:#f0c7c7;background:#fdf4f4}
+  .chip.alert b{color:var(--critical)}
+  .spacer{flex:1}
+  #search{font:inherit;font-size:13px;color:var(--ink);background:var(--plane);
+    border:1px solid var(--hairline);border-radius:8px;padding:6px 12px;width:230px;outline:none}
+  #search:focus{border-color:var(--accent);background:var(--card)}
+  #search::placeholder{color:var(--muted)}
+  #fit{font:inherit;font-size:13px;font-weight:550;color:var(--ink-2);background:var(--card);
+    border:1px solid var(--hairline);border-radius:8px;padding:6px 14px;cursor:pointer}
+  #fit:hover{border-color:var(--muted);color:var(--ink)}
+  #net{flex:1;min-height:0;
+    background-image:radial-gradient(var(--hairline) 1px, transparent 1px);
+    background-size:22px 22px}
+  .legend{position:fixed;bottom:16px;left:16px;background:var(--card);
+    border:1px solid var(--hairline);border-radius:12px;padding:10px 14px;
+    font-size:12px;color:var(--ink-2);box-shadow:var(--shadow);line-height:2}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:4px;
+    margin-right:8px;vertical-align:-2px;border:2px solid}
+  .cyc{display:inline-block;width:14px;margin-right:8px;vertical-align:2px;
+    border-top:2px dashed var(--critical)}
+  .hint{color:var(--muted);margin-top:2px}
+  div.vis-tooltip{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif !important;
+    font-size:12px !important;color:var(--ink-2) !important;background:var(--card) !important;
+    border:1px solid var(--hairline) !important;border-radius:8px !important;
+    padding:8px 11px !important;box-shadow:var(--shadow) !important;white-space:pre !important}
 </style></head>
 <body>
-<header><h1>Code Flow — {title}</h1>
-<div class="stats">{nodes} files &middot; {edges} dependencies &middot; {entries} entry points &middot; {cycles} cycles</div></header>
+<header>
+  <h1>__TITLE__ <span>· code flow</span></h1>
+  <div class="chips">
+    <span class="chip"><b>__FILE_COUNT__</b> files</span>
+    <span class="chip"><b>__EDGE_COUNT__</b> dependencies</span>
+    <span class="chip"><b>__ENTRY_COUNT__</b> entry points</span>
+    <span class="chip__CYCLE_ALERT__"><b>__CYCLE_COUNT__</b> cycles</span>
+  </div>
+  <div class="spacer"></div>
+  <input id="search" type="search" placeholder="Filter files… (e.g. auth)">
+  <button id="fit" title="Fit graph to view">Fit</button>
+</header>
 <div id="net"></div>
 <div class="legend">
-  <div><span class="dot" style="background:#234b7e"></span>Entry point</div>
-  <div><span class="dot" style="background:#4f81bd"></span>Hub (many dependents)</div>
-  <div><span class="dot" style="background:#6b7280"></span>Module</div>
-  <div style="margin-top:6px;color:#9aa4b2">Click a node to isolate its links</div>
+  <div><span class="sw" style="background:#cde2fb;border-color:#2a78d6"></span>Entry point</div>
+  <div><span class="sw" style="background:#c9f0e1;border-color:#1baf7a"></span>Hub (many dependents)</div>
+  <div><span class="sw" style="background:#ffffff;border-color:#e1e0d9"></span>Module</div>
+  <div><span class="cyc"></span>Circular dependency</div>
+  <div class="hint">Click a node to isolate its links · click canvas to reset</div>
 </div>
 <script>
-const nodes = new vis.DataSet({nodes_json});
-const edges = new vis.DataSet({edges_json});
+const nodes = new vis.DataSet(__NODES_JSON__);
+const edges = new vis.DataSet(__EDGES_JSON__);
 const container = document.getElementById('net');
-const data = {{nodes, edges}};
-const options = {{
-  nodes:{{shape:'dot',size:12,font:{{color:'#e6e6e6',size:12}},borderWidth:0}},
-  edges:{{arrows:'to',color:{{color:'#3a4152',highlight:'#7aa2e3'}},smooth:{{type:'continuous'}},width:1}},
-  physics:{{stabilization:true,barnesHut:{{gravitationalConstant:-8000,springLength:120}}}},
-  interaction:{{hover:true,tooltipDelay:120}}
-}};
-const network = new vis.Network(container, data, options);
-network.on('click', p => {{
-  if(p.nodes.length){{
+const options = {
+  nodes:{
+    shape:'box', shapeProperties:{borderRadius:10}, margin:10,
+    widthConstraint:{maximum:180},
+    font:{color:'#0b0b0b',size:13,face:'system-ui,-apple-system,Segoe UI,Roboto,sans-serif'},
+    shadow:{enabled:true,color:'rgba(11,11,11,0.10)',size:10,x:0,y:3},
+    borderWidth:1.5, borderWidthSelected:2.5
+  },
+  edges:{
+    arrows:{to:{enabled:true,scaleFactor:0.55}},
+    color:{color:'#c3c2b7',highlight:'#2a78d6',hover:'#2a78d6'},
+    smooth:{type:'cubicBezier',roundness:0.45},
+    width:1.5, hoverWidth:0.5, selectionWidth:1
+  },
+  physics:{
+    stabilization:{iterations:300},
+    barnesHut:{gravitationalConstant:-9000,springLength:150,springConstant:0.03,avoidOverlap:0.4}
+  },
+  interaction:{hover:true,tooltipDelay:150}
+};
+const network = new vis.Network(container, {nodes, edges}, options);
+network.once('stabilizationIterationsDone', () => network.fit({animation:false}));
+document.getElementById('fit').onclick = () =>
+  network.fit({animation:{duration:400,easingFunction:'easeInOutQuad'}});
+network.on('click', p => {
+  if(p.nodes.length){
     const id=p.nodes[0];
     const conn=new Set([id]);
-    edges.forEach(e=>{{if(e.from===id)conn.add(e.to);if(e.to===id)conn.add(e.from);}});
-    nodes.forEach(n=>nodes.update({{id:n.id,hidden:!conn.has(n.id)}}));
-  }} else {{ nodes.forEach(n=>nodes.update({{id:n.id,hidden:false}})); }}
-}});
+    edges.forEach(e=>{if(e.from===id)conn.add(e.to);if(e.to===id)conn.add(e.from);});
+    nodes.forEach(n=>nodes.update({id:n.id,hidden:!conn.has(n.id)}));
+  } else { nodes.forEach(n=>nodes.update({id:n.id,hidden:false})); }
+});
+document.getElementById('search').addEventListener('input', e => {
+  const q=e.target.value.trim().toLowerCase();
+  nodes.forEach(n=>nodes.update({id:n.id,opacity:(!q||n.path.toLowerCase().includes(q))?1:0.15}));
+});
 </script>
 </body></html>
 """
+
+# Node styling by role: light tint fill + saturated border, dark label text.
+# Palette pair (#2a78d6 / #1baf7a) is CVD-validated; cycle red is a reserved
+# status color, applied to borders/edges only — labels always carry identity.
+NODE_STYLES = {
+    "entry":  {"bg": "#cde2fb", "border": "#2a78d6", "font": "#0b0b0b"},
+    "hub":    {"bg": "#c9f0e1", "border": "#1baf7a", "font": "#0b0b0b"},
+    "module": {"bg": "#ffffff", "border": "#e1e0d9", "font": "#52514e"},
+}
 
 
 def make_html(files_set, edges, meta, title):
     entry = set(meta["entry_points"])
     hub = {h["file"] for h in meta["hubs"]}
+    cyc_edges = set()
+    for cyc in meta["cycles"]:
+        for i in range(len(cyc) - 1):
+            cyc_edges.add((cyc[i], cyc[i + 1]))
+    cyc_nodes = {n for e in cyc_edges for n in e}
+    out_deg = defaultdict(int)
+    for a, _ in edges:
+        out_deg[a] += 1
     used = set()
     for a, b in edges:
         used.add(a); used.add(b)
@@ -340,23 +427,43 @@ def make_html(files_set, edges, meta, title):
     idx = {}
     for i, n in enumerate(sorted(used)):
         idx[n] = i
-        color = "#6b7280"
-        size = 10 + min(meta["in_deg"].get(n, 0) * 2, 26)
-        if n in entry:
-            color = "#234b7e"
-        elif n in hub:
-            color = "#4f81bd"
-        node_list.append({"id": i, "label": short(n), "title": n, "color": color, "size": size})
-    edge_list = [{"from": idx[a], "to": idx[b]} for a, b in edges if a in idx and b in idx]
-    return HTML_TMPL.format(
-        title=title,
-        nodes=len(files_set),
-        edges=len(edges),
-        entries=len(meta["entry_points"]),
-        cycles=len(meta["cycles"]),
-        nodes_json=json.dumps(node_list),
-        edges_json=json.dumps(edge_list),
-    )
+        role = "entry" if n in entry else "hub" if n in hub else "module"
+        style = NODE_STYLES[role]
+        in_deg = meta["in_deg"].get(n, 0)
+        border = "#d03b3b" if n in cyc_nodes else style["border"]
+        node_list.append({
+            "id": i,
+            "label": short(n),
+            "path": n,
+            "title": f"{n}\nimports: {out_deg[n]} · imported by: {in_deg}",
+            "color": {
+                "background": style["bg"], "border": border,
+                "highlight": {"background": style["bg"], "border": "#2a78d6"},
+                "hover": {"background": style["bg"], "border": border},
+            },
+            "font": {"color": style["font"], "size": 12 + min(in_deg, 6)},
+            "margin": 9 + min(in_deg, 8),
+            "borderWidth": 2.5 if n in cyc_nodes else 1.5,
+        })
+    edge_list = []
+    for a, b in edges:
+        if a not in idx or b not in idx:
+            continue
+        e = {"from": idx[a], "to": idx[b]}
+        if (a, b) in cyc_edges:
+            e.update({"dashes": [6, 4], "width": 2,
+                      "color": {"color": "#d03b3b", "highlight": "#b52c2c", "hover": "#b52c2c"}})
+        edge_list.append(e)
+    n_cycles = len(meta["cycles"])
+    return (HTML_TMPL
+            .replace("__TITLE__", title)
+            .replace("__FILE_COUNT__", str(len(files_set)))
+            .replace("__EDGE_COUNT__", str(len(edges)))
+            .replace("__ENTRY_COUNT__", str(len(meta["entry_points"])))
+            .replace("__CYCLE_ALERT__", " alert" if n_cycles else "")
+            .replace("__CYCLE_COUNT__", str(n_cycles))
+            .replace("__NODES_JSON__", json.dumps(node_list))
+            .replace("__EDGES_JSON__", json.dumps(edge_list)))
 
 
 def main():
