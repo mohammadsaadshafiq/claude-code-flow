@@ -1,37 +1,62 @@
-# code-flow-explainer — Claude Code skill
+# code-flow-explainer
 
-Explains how a codebase is wired: entry points, dependency graph, hubs, cycles.
-Outputs an interactive HTML graph, a Mermaid diagram, and a JSON summary.
+A Claude Code skill that explains how a codebase is wired: entry points,
+dependency graph, hub files, and circular dependencies. It outputs an
+interactive HTML graph, a Mermaid diagram, and a JSON summary that Claude
+narrates in plain language.
+
+![Interactive dependency graph produced by code-flow-explainer](docs/demo.png)
 
 ## Install
 
 ```bash
-git clone <this-repo> ~/.claude/skills/code-flow-explainer
+git clone https://github.com/mohammadsaadshafiq/claude-code-flow.git ~/.claude/skills/code-flow-explainer
 ```
 
 or unzip so that `~/.claude/skills/code-flow-explainer/SKILL.md` exists.
 
+To get the `/visual-flow` slash command as well:
+
+```bash
+mkdir -p ~/.claude/commands
+cp ~/.claude/skills/code-flow-explainer/commands/visual-flow.md ~/.claude/commands/
+```
+
 ## Use
 
-In Claude Code: type `/code-flow-explainer`, or just ask
-"explain the code flow of this repo".
+- **`/visual-flow <what you want to see>`** — describe the flow you care about
+  and Claude analyzes the repo, then narrates just that path through the code:
 
-Manual run:
+  ```
+  /visual-flow the auth flow
+  /visual-flow how src/app is wired
+  /visual-flow what happens from main.ts to the database layer
+  ```
+
+- **`/code-flow-explainer`** — full analysis of the whole repo.
+
+- Or just ask in plain language: *"explain the code flow of this repo"*.
+
+Manual run (no Claude needed):
 
 ```bash
 python3 ~/.claude/skills/code-flow-explainer/scripts/analyze.py .
 ```
 
+Useful flags: `--dir src/app` (subfolder only), `--include ts,tsx,js,py`,
+`--max-nodes 120` (cap graph size), `--out flow` (output name stem).
+
 ## Features
 
-- TS/JS/JSX/TSX + Python, zero dependencies (stdlib only)
+- TS/JS/JSX/TSX + Python, zero dependencies (Python stdlib only)
 - Resolves relative imports, dynamic `import()` (Angular lazy routes),
   and **tsconfig path aliases** (`@core/*`, `@env`, ...)
 - Entry points, hub files (blast radius), circular dependencies, orphans
 - Safe on large/deep repos (iterative cycle detection, node caps)
 
-## Outputs (generated in project root — gitignored here)
+## Outputs (generated in the analyzed project's root — gitignored here)
 
-- `code-flow.html` — interactive graph (open in browser)
-- `code-flow.mmd`  — Mermaid, paste into PRs/docs
+- `code-flow.html` — interactive graph: drag, zoom, click a node to isolate
+  its in/out edges (shown above)
+- `code-flow.mmd` — Mermaid diagram, paste into PRs/docs
 - `code-flow.json` — structured summary Claude narrates from
