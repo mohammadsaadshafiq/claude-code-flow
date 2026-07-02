@@ -4,9 +4,10 @@ code-flow-explainer: static module-dependency analyzer.
 
 Scans a repo, resolves import/require/from statements between local files,
 and emits:
-  - <out>.json : structured summary (entry points, hubs, cycles, edges)
-  - <out>.mmd  : Mermaid flowchart
-  - <out>.html : interactive force-graph (vis-network via CDN)
+  - <out>.md   : report with embedded Mermaid diagram — renders as a real
+                 diagram in IDE markdown preview (VS Code/JetBrains) & GitHub
+  - <out>.html : interactive board-style graph (vis-network via CDN)
+  - <out>.json : structured summary, only with --json
 
 Standard library only. Supports TS/JS(X), Python. Ignores node_modules, .git,
 dist, build, venv, __pycache__, etc.
@@ -50,6 +51,8 @@ def parse_args():
     p.add_argument("--include", default=",".join(DEFAULT_EXTS), help="comma-separated extensions")
     p.add_argument("--max-nodes", type=int, default=200, help="cap graph node count")
     p.add_argument("--out", default="code-flow", help="output filename stem")
+    p.add_argument("--json", action="store_true",
+                   help="also write <out>.json (machine-readable summary)")
     return p.parse_args()
 
 
@@ -276,10 +279,49 @@ def make_mermaid(edges, meta, max_nodes):
         lines.append(f"    class {','.join(entry_ids)} entry;")
     if hub_ids:
         lines.append(f"    class {','.join(hub_ids)} hub;")
-    lines.append("    classDef entry fill:#234b7e,stroke:#1a3860,color:#fff;")
-    lines.append("    classDef hub fill:#4f81bd,stroke:#3a6294,color:#fff;")
+    lines.append("    classDef entry fill:#cde2fb,stroke:#2a78d6,color:#0b0b0b;")
+    lines.append("    classDef hub fill:#c9f0e1,stroke:#1baf7a,color:#0b0b0b;")
     if not shown:
         lines.append("    empty[No local dependencies detected]")
+    return "\n".join(lines)
+
+
+def make_markdown(files_set, edges, meta, title, max_nodes):
+    """IDE-viewable report: Mermaid diagram (renders in VS Code/JetBrains/
+    GitHub markdown preview) plus the summary sections."""
+    n_cyc = len(meta["cycles"])
+    lines = [
+        f"# Code flow — {title}",
+        "",
+        f"{len(files_set)} files · {len(edges)} dependencies · "
+        f"{len(meta['entry_points'])} entry points · {n_cyc} cycle{'s' if n_cyc != 1 else ''}",
+        "",
+        "```mermaid",
+        make_mermaid(edges, meta, max_nodes),
+        "```",
+        "",
+        "## Entry points",
+        "",
+    ]
+    lines += [f"- `{n}`" for n in meta["entry_points"]] or ["- none detected"]
+    lines += ["", "## Hubs (most depended-on)", ""]
+    lines += [f"- `{h['file']}` — imported by {h['dependents']}" for h in meta["hubs"]] or ["- none"]
+    lines += ["", "## Circular dependencies", ""]
+    if meta["cycles"]:
+        lines += ["- " + " → ".join(f"`{n}`" for n in cyc) for cyc in meta["cycles"]]
+    else:
+        lines.append("- none found")
+    if meta["orphans"]:
+        lines += ["", "## Orphans (unconnected files)", ""]
+        lines += [f"- `{n}`" for n in meta["orphans"]]
+    lines += [
+        "",
+        "---",
+        "",
+        "_Interactive version: open `code-flow.html` in a browser "
+        "(drag, zoom, filter, click a node to isolate its links)._",
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -483,30 +525,36 @@ def main():
     files_set, edges = build_graph(files, base)
     meta = analyze(files_set, edges)
 
-    all_edges = sorted([[a, b] for a, b in edges])
-    summary = {
-        "root": norm(scan_dir, base) or ".",
-        "file_count": len(files_set),
-        "edge_count": len(edges),
-        "edges_truncated": len(all_edges) > 400,
-        "entry_points": meta["entry_points"],
-        "hubs": meta["hubs"],
-        "cycles": meta["cycles"],
-        "orphans": meta["orphans"],
-        "edges": all_edges[:400],
-    }
-
     out = args.out
-    with open(f"{out}.json", "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
-    with open(f"{out}.mmd", "w", encoding="utf-8") as f:
-        f.write(make_mermaid(edges, meta, args.max_nodes))
+    title = os.path.basename(base)
+    written = [f"{out}.md", f"{out}.html"]
+    with open(f"{out}.md", "w", encoding="utf-8") as f:
+        f.write(make_markdown(files_set, edges, meta, title, args.max_nodes))
     with open(f"{out}.html", "w", encoding="utf-8") as f:
-        f.write(make_html(files_set, edges, meta, os.path.basename(base)))
+        f.write(make_html(files_set, edges, meta, title))
+
+    if args.json:
+        all_edges = sorted([[a, b] for a, b in edges])
+        summary = {
+            "root": norm(scan_dir, base) or ".",
+            "file_count": len(files_set),
+            "edge_count": len(edges),
+            "edges_truncated": len(all_edges) > 400,
+            "entry_points": meta["entry_points"],
+            "hubs": meta["hubs"],
+            "cycles": meta["cycles"],
+            "orphans": meta["orphans"],
+            "edges": all_edges[:400],
+        }
+        with open(f"{out}.json", "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
+        written.append(f"{out}.json")
 
     print(f"Analyzed {len(files_set)} files, {len(edges)} dependencies.")
     print(f"  Entry points: {len(meta['entry_points'])}  Hubs: {len(meta['hubs'])}  Cycles: {len(meta['cycles'])}")
-    print(f"Wrote {out}.json, {out}.mmd, {out}.html")
+    print(f"Wrote {', '.join(written)}")
+    print(f"View {out}.md in your IDE (Mermaid renders in markdown preview), "
+          f"or open {out}.html in a browser.")
 
 
 if __name__ == "__main__":

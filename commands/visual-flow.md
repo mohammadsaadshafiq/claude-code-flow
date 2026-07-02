@@ -17,7 +17,8 @@ If no flow was given, explain the overall flow of the repo.
    If the requested flow lives in a subfolder, narrow the graph with
    `--dir <folder>` (e.g. `--dir src/app`). For huge repos add `--max-nodes 120`.
 
-2. Read `code-flow.json` with the Read tool. Do NOT dump the raw JSON.
+2. Read `code-flow.md` with the Read tool — it contains the Mermaid diagram
+   and the summary. Do NOT dump it raw.
    Narrate only the parts relevant to the requested flow:
    - Start at the entry point that reaches the requested flow.
    - Walk the dependency chain file by file, explaining what each layer does.
@@ -26,5 +27,6 @@ If no flow was given, explain the overall flow of the repo.
    If the requested flow doesn't match anything in the graph, say so and list
    the closest matches — never invent modules.
 
-3. Point the user at the visuals: `code-flow.html` (interactive graph — click a
-   node to isolate its links) and `code-flow.mmd` (Mermaid, paste into PRs/docs).
+3. Point the user at the visuals: `code-flow.md` renders as a diagram right in
+   the IDE's markdown preview (and on GitHub); `code-flow.html` is the
+   interactive graph (click a node to isolate its links).

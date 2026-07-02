@@ -56,8 +56,10 @@ Useful flags: `--dir src/app` (subfolder only), `--include ts,tsx,js,py`,
 
 ## Outputs (generated in the analyzed project's root — gitignored here)
 
+- `code-flow.md` — report with an embedded Mermaid diagram: renders as a real
+  diagram right in your IDE's markdown preview (VS Code, JetBrains, Cursor)
+  and on GitHub, plus entry points, hubs, and cycles
 - `code-flow.html` — interactive board-style graph (shown above): drag, zoom,
   filter files by name, click a node to isolate its in/out edges; circular
   dependencies are drawn in dashed red
-- `code-flow.mmd` — Mermaid diagram, paste into PRs/docs
-- `code-flow.json` — structured summary Claude narrates from
+- `code-flow.json` — machine-readable summary, only with `--json`

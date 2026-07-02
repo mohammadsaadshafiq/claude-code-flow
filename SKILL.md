@@ -31,18 +31,20 @@ Useful flags:
 - `--include ts,tsx,js,py` — restrict to specific extensions
 - `--max-nodes 120` — cap graph size (default 200); huge repos get summarized
 - `--out flow` — output filename stem (default `code-flow`)
+- `--json` — additionally write `code-flow.json` (machine-readable summary)
 
-This writes three files next to where you run it:
+This writes two files next to where you run it:
 
-1. `code-flow.html` — interactive graph (drag, zoom, click a node to isolate its
-   in/out edges). Open it in a browser.
-2. `code-flow.mmd` — a Mermaid diagram you can paste into docs / PRs.
-3. `code-flow.json` — structured summary (entry points, hubs, cycles, edges).
+1. `code-flow.md` — the report: a Mermaid diagram (renders directly in the
+   IDE's markdown preview and on GitHub) plus entry points, hubs, cycles.
+2. `code-flow.html` — interactive graph (drag, zoom, filter, click a node to
+   isolate its in/out edges). Open it in a browser.
 
 ## What to do after running
 
-1. **Read `code-flow.json`** with the Read tool. Do NOT dump the raw JSON at the
-   user. Use it to explain the flow in prose.
+1. **Read `code-flow.md`** with the Read tool — it contains the diagram and
+   the summary (entry points, hubs, cycles, orphans). Do NOT dump it raw at
+   the user; use it to explain the flow in prose.
 2. Structure the explanation like this:
    - **Entry points** — where execution starts (files nothing else imports, or
      files matching main/index/app/bootstrap patterns).
@@ -50,8 +52,9 @@ This writes three files next to where you run it:
      describing what each layer does (e.g. component → service → data layer).
    - **Hubs** — files many others depend on; changing these is high-blast-radius.
    - **Cycles** — flag any circular dependencies as things to watch/refactor.
-3. Reference the diagram: tell the user to open `code-flow.html`, and optionally
-   inline the Mermaid from `code-flow.mmd` if they want it in a doc.
+3. Reference the diagram: tell the user to open `code-flow.md` in their IDE's
+   markdown preview (the Mermaid block renders as a diagram there and on
+   GitHub), or `code-flow.html` in a browser for the interactive version.
 4. Keep it grounded in the actual files found — never invent modules.
 
 ## Notes
@@ -63,7 +66,8 @@ This writes three files next to where you run it:
 - Resolves tsconfig path aliases (`@core/*`, `@env`, ...) from tsconfig.json /
   tsconfig.base.json / tsconfig.app.json, and dynamic `import()` used by
   Angular lazy routes.
-- If `edges_truncated` is true in the JSON, the edge list is capped at 400 —
-  rely on `entry_points`/`hubs`/`cycles` for the big picture and rerun with
-  `--dir` on a subfolder for detail.
+- Need machine-readable data (full edge list, degrees)? Rerun with `--json`.
+  If `edges_truncated` is true there, the edge list is capped at 400 — rely on
+  `entry_points`/`hubs`/`cycles` for the big picture and rerun with `--dir` on
+  a subfolder for detail.
 - Zero external Python dependencies — standard library only.
